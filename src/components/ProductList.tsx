@@ -1,19 +1,37 @@
-import { useEffect, useRef, useState } from "react";
+import { MouseEvent, useEffect, useRef, useState } from "react";
 import { useStoreActions, useStoreState } from "../hooks/hooks";
-import { Product } from "../Store/models/productModel";
+import { Link } from "react-router-dom";
+import useDebounce from "../hooks/useDebounce";
 
 const ProductList = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [page, setPage] = useState<number>(1);
+  const [searchTerm, setSearchTerm] = useState<string>(""); // Search input state
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const { fetchAndAddProducts, addToCart, updateQuantity, removeFromCart } =
     useStoreActions((actions) => actions.product);
   const { products, cart } = useStoreState((state) => state.product);
   const observer = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    fetchAndAddProducts(page).finally(() => setLoading(false));
-  }, [page, fetchAndAddProducts]);
+    const loadData = async () => {
+      setLoading(true);
+      if (debouncedSearchTerm) {
+        await fetchAndAddProducts({ page: page, search: debouncedSearchTerm });
+      } else {
+        await fetchAndAddProducts({ page: page, search: "" });
+      }
+      setLoading(false);
+    };
+    loadData();
+  }, [debouncedSearchTerm, fetchAndAddProducts, page]);
+
+  // Handle change in the search input
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value); // Update search term
+    // delayedQuery(value); // Trigger the debounced API call
+  };
 
   // Infinite scroll logic using IntersectionObserver
   useEffect(() => {
@@ -41,6 +59,7 @@ const ProductList = () => {
       }
     };
   }, [products]);
+
   // Check if product is in cart
   const isInCart = (productId: number) => {
     return cart.some((item) => item.id === productId);
@@ -52,7 +71,12 @@ const ProductList = () => {
   };
 
   // Handle adding/removing quantity
-  const handleQuantityChange = (productId: number, action: string) => {
+  const handleQuantityChange = (
+    e: MouseEvent<HTMLButtonElement, globalThis.MouseEvent>,
+    productId: number,
+    action: string
+  ) => {
+    e.preventDefault();
     const cartItem = getCartItem(productId);
     if (action === "increment") {
       updateQuantity({
@@ -66,28 +90,69 @@ const ProductList = () => {
     }
   };
 
+  const handleAddToCart = (
+    e: MouseEvent<HTMLButtonElement, globalThis.MouseEvent>,
+    id: number
+  ) => {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent routing when "Add to Cart" is clicked
+    addToCart(id);
+  };
+
+  const handleRemoveFromCart = (
+    e: MouseEvent<HTMLButtonElement, globalThis.MouseEvent>,
+    id: number
+  ) => {
+    e.preventDefault();
+    removeFromCart(id);
+  };
+
   return (
     <div>
+      <div className="mb-6">
+        {/* Search bar */}
+        <label className="form-control w-full max-w-xs">
+          <div className="label">
+            <span className="label-text">What is your name?</span>
+          </div>
+          <input
+            type="text"
+            placeholder="Search product!"
+            className="input input-bordered w-full max-w-xs"
+            value={searchTerm}
+            onChange={handleSearchChange}
+          />
+        </label>
+      </div>
+
+      {/* Product List */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {products.map((product) => {
           const cartItem = getCartItem(product.id);
           return (
             <div key={product.id} className="border p-4 rounded-lg shadow-lg">
-              <img
-                src={product.image}
-                alt={product.title}
-                className="w-full h-40 object-cover mb-4"
-              />
-              <h3 className="font-semibold text-lg">{product.title}</h3>
-              <p className="text-gray-600 text-sm">{product.category}</p>
-              <p className="font-bold text-lg">${product.price}</p>
+              {/* Link to product details page */}
+              <Link
+                to={`/product/${product.id}`}
+                className="block"
+                onClick={(e) => e.stopPropagation()} // Prevent triggering "Add to Cart" logic
+              >
+                <img
+                  src={product.image}
+                  alt={product.title}
+                  className="w-full h-40 object-cover mb-4"
+                />
+                <h3 className="font-semibold text-lg">{product.title}</h3>
+                <p className="text-gray-600 text-sm">{product.category}</p>
+                <p className="font-bold text-lg">${product.price}</p>
+              </Link>
 
-              {/* If the product is in the cart, show the quantity control */}
+              {/* Add to Cart Button or Quantity Controls */}
               {isInCart(product.id) ? (
                 <div className="flex items-center space-x-2">
                   <button
-                    onClick={() =>
-                      handleQuantityChange(product.id, "decrement")
+                    onClick={(e) =>
+                      handleQuantityChange(e, product.id, "decrement")
                     }
                     className="btn btn-sm btn-secondary"
                   >
@@ -95,15 +160,15 @@ const ProductList = () => {
                   </button>
                   <span>{cartItem?.quantity}</span>
                   <button
-                    onClick={() =>
-                      handleQuantityChange(product.id, "increment")
+                    onClick={(e) =>
+                      handleQuantityChange(e, product.id, "increment")
                     }
                     className="btn btn-sm btn-secondary"
                   >
                     +
                   </button>
                   <button
-                    onClick={() => removeFromCart(product.id)}
+                    onClick={(e) => handleRemoveFromCart(e, product.id)}
                     className="btn btn-sm btn-danger"
                   >
                     🗑️
@@ -111,7 +176,7 @@ const ProductList = () => {
                 </div>
               ) : (
                 <button
-                  onClick={() => addToCart(product.id)}
+                  onClick={(e) => handleAddToCart(e, product.id)}
                   className="btn btn-sm btn-primary mt-4"
                 >
                   Add to Cart
@@ -123,11 +188,7 @@ const ProductList = () => {
       </div>
 
       {/* Loading Spinner */}
-      {loading && (
-        <div className="flex justify-center my-4">
-          <div className="w-8 h-8 border-4 border-t-4 border-blue-500 rounded-full animate-spin"></div>
-        </div>
-      )}
+      {loading && <span className="loading loading-dots loading-lg"></span>}
 
       {/* Placeholder for infinite scroll */}
       <div id="last-product"></div>
