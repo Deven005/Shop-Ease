@@ -16,13 +16,18 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
+interface FetchProductModel {
+  page: number;
+  search: string;
+}
+
 // Define the ProductModel interface for easy-peasy store model
 export interface ProductModel {
   products: Product[]; // List of available products
   cart: CartItem[]; // Cart items (with quantity)
 
   // Thunks to fetch products
-  fetchAndAddProducts: Thunk<ProductModel, number>;
+  fetchAndAddProducts: Thunk<ProductModel, FetchProductModel>;
 
   // Actions
   addProduct: Action<ProductModel, Product>; // Add a product to the products list
@@ -37,12 +42,26 @@ export const productModel: ProductModel = {
   cart: [], // Initial cart (empty)
 
   // Fetch products from API and add to store
-  fetchAndAddProducts: thunk(async (actions, page: number) => {
+  fetchAndAddProducts: thunk(async (actions, payload, { getState }) => {
+    const { page } = payload;
     const response = await fetch(
-      "https://fakestoreapi.com/products?limit=10&sort=desc&page=${page}"
+      `https://fakestoreapi.com/products?limit=${
+        page * 5
+      }&sort=desc&page=${page}`
     );
     const data: Product[] = await response.json();
-    data.forEach((product) => actions.addProduct(product)); // Add each product to the store
+    // data.forEach((product) => actions.addProduct(product)); // Add each product to the store
+    data.forEach((product) => {
+      // Check if the product is already in the store
+      const isProductExists = getState().products.some(
+        (existingProduct) => existingProduct.id === product.id
+      );
+
+      if (!isProductExists) {
+        // Add the product only if it doesn't exist in the store
+        actions.addProduct(product);
+      }
+    });
   }),
 
   // Action to add a product to the products list
