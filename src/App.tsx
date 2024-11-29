@@ -1,30 +1,25 @@
-import { useState } from "react";
 import "./App.css";
 import { useStoreRehydrated } from "easy-peasy";
-import { useStoreActions, useStoreState } from "./hooks/hooks";
 import ProductList from "./components/ProductList";
 import Cart from "./components/Cart";
+import { BrowserRouter, Route, Routes } from "react-router";
+import Header from "./components/Header";
+import ProductDetails from "./components/ProductDetails";
 
 function App() {
   const isRehydrated = useStoreRehydrated();
 
-  // const cart = useStoreState((state) => state.product.cart);
-
-  const [isCartVisible, setCartVisible] = useState(false);
-  const toggleCart = () => setCartVisible(!isCartVisible);
-
   return isRehydrated ? (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-blue-500 p-4 text-white">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-semibold">ShopEase</h1>
-        </div>
-      </header>
-
-      <ProductList />
-
-      {isCartVisible && <Cart />}
-    </div>
+    <BrowserRouter>
+      <Header />
+      <div className="container mx-auto p-4">
+        <Routes>
+          <Route path="/" element={<ProductList />} />
+          <Route path="/cart" element={<Cart />} />
+          <Route path="/product/:id" element={<ProductDetails />} />
+        </Routes>
+      </div>
+    </BrowserRouter>
   ) : (
     <div>Loading...</div>
   );
